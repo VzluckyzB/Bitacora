@@ -8,9 +8,14 @@
 /* ── State ─────────────────────────────────────────────── */
 const state = {
   workbook:    null,   // XLSX workbook loaded from file
+  fileHandle:  null,   // FileSystemFileHandle — para sobreescribir el mismo archivo
+  fileName:    null,   // Nombre original del archivo cargado
   records:     [],     // pending rows [ {empresa,fechaIngreso,…} ]
   searchQuery: "",
 };
+
+// ¿El navegador soporta File System Access API?
+const FS_API = "showOpenFilePicker" in window;
 
 const HEADERS = [
   "Empresa",
@@ -52,7 +57,16 @@ themeToggle.addEventListener("click", () => {
 });
 
 /* ── File Upload ────────────────────────────────────────── */
-uploadZone.addEventListener("click", () => fileInput.click());
+
+// El botón "Seleccionar Archivo" usa la API correcta según el navegador
+document.querySelector(".btn-outline").addEventListener("click", (e) => {
+  e.stopPropagation();
+  FS_API ? openWithFSAPI() : fileInput.click();
+});
+
+uploadZone.addEventListener("click", () => {
+  FS_API ? openWithFSAPI() : fileInput.click();
+});
 
 uploadZone.addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -63,29 +77,57 @@ uploadZone.addEventListener("drop", (e) => {
   e.preventDefault();
   uploadZone.classList.remove("drag-over");
   const file = e.dataTransfer.files[0];
-  if (file) handleFile(file);
+  if (file) readFileObject(file); // drag-drop no da FileHandle → fallback descarga
 });
 
 fileInput.addEventListener("change", () => {
-  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  if (fileInput.files[0]) readFileObject(fileInput.files[0]);
 });
 
-function handleFile(file) {
-  if (!file.name.endsWith(".xlsx")) {
-    showFileStatus("❌ Solo se aceptan archivos .xlsx", "error");
-    return;
+/* File System Access API — abre Y guarda el handle para sobreescribir */
+async function openWithFSAPI() {
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }],
+      multiple: false,
+    });
+    state.fileHandle = handle;
+    state.fileName   = handle.name;
+    const file = await handle.getFile();
+    await readFileObject(file);
+    showFileStatus(`✅ Vinculado: ${handle.name} — se sobreescribirá automáticamente`, "ok");
+  } catch (err) {
+    if (err.name !== "AbortError") showFileStatus("❌ No se pudo abrir el archivo.", "error");
   }
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      state.workbook = XLSX.read(e.target.result, { type: "binary" });
-      showFileStatus(`✅ Archivo cargado: ${file.name}`, "ok");
-    } catch {
-      showFileStatus("❌ Error al leer el archivo Excel.", "error");
-      state.workbook = null;
+}
+
+/* Lee un File object y carga el workbook */
+function readFileObject(file) {
+  return new Promise((resolve) => {
+    if (!file.name.endsWith(".xlsx")) {
+      showFileStatus("❌ Solo se aceptan archivos .xlsx", "error");
+      resolve();
+      return;
     }
-  };
-  reader.readAsBinaryString(file);
+    if (!state.fileHandle) {
+      // Vino de drag-drop o input clásico: guardamos nombre pero no handle
+      state.fileName = file.name;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        state.workbook = XLSX.read(e.target.result, { type: "binary" });
+        if (!state.fileHandle) {
+          showFileStatus(`✅ Archivo cargado: ${file.name} (se descargará como nuevo archivo)`, "ok");
+        }
+      } catch {
+        showFileStatus("❌ Error al leer el archivo Excel.", "error");
+        state.workbook = null;
+      }
+      resolve();
+    };
+    reader.readAsBinaryString(file);
+  });
 }
 
 function showFileStatus(msg, type) {
@@ -136,7 +178,7 @@ function validateForm() {
 }
 
 /* ── Form Submit ────────────────────────────────────────── */
-accessForm.addEventListener("submit", (e) => {
+accessForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearMessage();
   if (!validateForm()) {
@@ -157,8 +199,7 @@ accessForm.addEventListener("submit", (e) => {
   // Prepend (most recent first in preview)
   state.records.unshift(record);
   renderTable();
-  exportAndDownload(record);
-  showMessage("✅ Registro guardado y Excel descargado exitosamente.", "success");
+  await exportAndDownload(record);
   resetForm();
 });
 
@@ -188,7 +229,7 @@ function clearMessage() {
 }
 
 /* ── Export Excel ───────────────────────────────────────── */
-function exportAndDownload(newRecord) {
+async function exportAndDownload(newRecord) {
   let wb = state.workbook
     ? cloneWorkbook(state.workbook)
     : createFreshWorkbook();
@@ -204,23 +245,50 @@ function exportAndDownload(newRecord) {
     aoa.unshift(HEADERS);
   }
 
-  // Build new row
-  const newRow = recordToRow(newRecord);
-
   // Insert AFTER header row (index 1) → most recent at top
-  aoa.splice(1, 0, newRow);
+  aoa.splice(1, 0, recordToRow(newRecord));
 
   // Rebuild worksheet
   const newWs = XLSX.utils.aoa_to_sheet(aoa);
-  styleWorksheet(newWs, aoa.length);
+  styleWorksheet(newWs);
   wb.Sheets[sheetName] = newWs;
 
-  // Save the updated workbook for subsequent saves
+  // Persist updated workbook in state
   state.workbook = wb;
 
-  // Download
+  // ── Intentar sobreescribir vía File System Access API ──
+  if (state.fileHandle) {
+    try {
+      await writeToHandle(state.fileHandle, wb);
+      showMessage(`✅ Archivo actualizado: ${state.fileHandle.name}`, "success");
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") {
+        showMessage("⚠️ Guardado cancelado por el usuario.", "error");
+        return;
+      }
+      // Si falla por cualquier razón, caemos al fallback
+      console.warn("File System API falló, usando descarga:", err);
+    }
+  }
+
+  // ── Fallback: descarga clásica ──
   const today = new Date().toISOString().split("T")[0];
-  XLSX.writeFile(wb, `Bitacora_${today}.xlsx`);
+  const name  = state.fileName
+    ? state.fileName.replace(/\.xlsx$/i, `_${today}.xlsx`)
+    : `Bitacora_${today}.xlsx`;
+  XLSX.writeFile(wb, name);
+}
+
+/* Escribe el workbook al FileHandle (sobreescribe en disco) */
+async function writeToHandle(handle, wb) {
+  const wbBinary = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbBinary], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
 }
 
 function recordToRow(r) {
@@ -252,24 +320,31 @@ function cloneWorkbook(wb) {
   return XLSX.read(binary, { type: "binary" });
 }
 
-function styleWorksheet(ws, rowCount) {
+function styleWorksheet(ws) {
   // Column widths
   const colWidths = [28, 14, 12, 18, 15, 14, 12];
   ws["!cols"] = colWidths.map((w) => ({ wch: w }));
 }
 
 /* ── Manual Export Button ───────────────────────────────── */
-exportBtn.addEventListener("click", () => {
-  if (state.records.length === 0 && !state.workbook) {
-    showMessage("No hay registros en la sesión para exportar.", "error");
+exportBtn.addEventListener("click", async () => {
+  if (!state.workbook) {
+    showMessage("Agrega al menos un registro primero.", "error");
     return;
   }
-  // Re-export current workbook
-  if (state.workbook) {
-    const today = new Date().toISOString().split("T")[0];
-    XLSX.writeFile(state.workbook, `Bitacora_${today}.xlsx`);
+  if (state.fileHandle) {
+    try {
+      await writeToHandle(state.fileHandle, state.workbook);
+      showMessage(`✅ Archivo guardado: ${state.fileHandle.name}`, "success");
+    } catch {
+      showMessage("❌ No se pudo guardar el archivo.", "error");
+    }
   } else {
-    showMessage("Agrega al menos un registro primero.", "error");
+    const today = new Date().toISOString().split("T")[0];
+    const name  = state.fileName
+      ? state.fileName.replace(/\.xlsx$/i, `_${today}.xlsx`)
+      : `Bitacora_${today}.xlsx`;
+    XLSX.writeFile(state.workbook, name);
   }
 });
 
