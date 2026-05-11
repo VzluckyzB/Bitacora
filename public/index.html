@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bitácora de Acceso — Kidde</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="light-theme">
+
+  <!-- TOP BANNER -->
+  <div class="top-banner">
+    <span>🔥 Bitácora de Acceso — Fire Extinguishing Solutions for Home, Business &amp; Recreational Vehicles</span>
+    <button class="theme-toggle" id="themeToggle" title="Cambiar tema">☀️</button>
+  </div>
+
+  <!-- HEADER -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">✕</span>
+        <span class="logo-text">KIDDE</span>
+      </div>
+      <nav class="header-nav">
+        <span>Residencial</span>
+        <span>Profesional</span>
+        <span>Safety Hub</span>
+        <span>Soporte</span>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Bitácora de<br/><span class="hero-accent">Acceso</span></h1>
+      <p class="hero-sub">Registro profesional de entradas y salidas. Seguro, eficiente y exportable a Excel.</p>
+      <div class="hero-stat">
+        <div class="stat-badge">
+          <strong>#1</strong>
+          <span>Sistema de registro en tiempo real</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="alarm-card">
+        <div class="alarm-display">
+          <div class="alarm-bars">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="alarm-label">REGISTRO<br/>ACTIVO</div>
+        </div>
+        <div class="alarm-buttons">
+          <button class="alarm-btn minus">−</button>
+          <div class="alarm-value">ON</div>
+          <button class="alarm-btn plus">+</button>
+        </div>
+        <div class="alarm-footer">
+          <span class="dot green"></span> SISTEMA OK
+          <span class="dot red"></span> ALERTA
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RED BAND -->
+  <div class="red-band">
+    <strong>Sistema de Bitácora #1 en México</strong>
+    <span> — Registro automático con exportación instantánea a Excel</span>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- FILE LOADER -->
+    <section class="card upload-card" id="uploadSection">
+      <div class="card-header">
+        <div class="card-icon">📂</div>
+        <div>
+          <h2>Cargar Archivo Excel</h2>
+          <p>Selecciona tu bitácora existente (.xlsx) para agregar nuevos registros</p>
+        </div>
+      </div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".xlsx" hidden />
+        <div class="upload-icon">📊</div>
+        <p class="upload-title">Arrastra tu archivo aquí</p>
+        <p class="upload-sub">o haz clic para seleccionarlo</p>
+        <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">Seleccionar Archivo</button>
+        <div id="fileStatus" class="file-status hidden"></div>
+      </div>
+      <div class="upload-note">
+        ⚠️ Si no cargas un archivo, se creará uno nuevo automáticamente con los encabezados correctos.
+      </div>
+    </section>
+
+    <!-- FORM -->
+    <section class="card form-card">
+      <div class="card-header">
+        <div class="card-icon">📋</div>
+        <div>
+          <h2>Nuevo Registro</h2>
+          <p>Completa todos los campos para guardar el acceso</p>
+        </div>
+      </div>
+
+      <form id="accessForm" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="empresa">Nombre de la Empresa <span class="req">*</span></label>
+            <input type="text" id="empresa" placeholder="Ej. Distribuidora ABC S.A." autocomplete="off"/>
+            <span class="field-error" id="err-empresa"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="matricula">Número de Matrícula <span class="req">*</span></label>
+            <input type="text" id="matricula" placeholder="Ej. MAT-2024-001" autocomplete="off"/>
+            <span class="field-error" id="err-matricula"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="tipoLicencia">Tipo de Licencia <span class="req">*</span></label>
+            <select id="tipoLicencia">
+              <option value="">— Seleccionar —</option>
+              <option value="Tipo A">Tipo A</option>
+              <option value="Tipo B">Tipo B</option>
+              <option value="Tipo C">Tipo C</option>
+              <option value="Tipo D">Tipo D</option>
+              <option value="Tipo E">Tipo E</option>
+              <option value="Comercial">Comercial</option>
+              <option value="Especial">Especial</option>
+            </select>
+            <span class="field-error" id="err-tipoLicencia"></span>
+          </div>
+
+          <div class="form-group form-group--spacer"></div>
+
+          <div class="form-group">
+            <label for="fechaIngreso">Fecha de Ingreso <span class="req">*</span></label>
+            <input type="date" id="fechaIngreso"/>
+            <span class="field-error" id="err-fechaIngreso"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="horaIngreso">Hora de Ingreso <span class="req">*</span></label>
+            <input type="time" id="horaIngreso"/>
+            <span class="field-error" id="err-horaIngreso"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="fechaSalida">Fecha de Salida <span class="req">*</span></label>
+            <input type="date" id="fechaSalida"/>
+            <span class="field-error" id="err-fechaSalida"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="horaSalida">Hora de Salida <span class="req">*</span></label>
+            <input type="time" id="horaSalida"/>
+            <span class="field-error" id="err-horaSalida"></span>
+          </div>
+
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" id="clearBtn">🗑 Limpiar</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">
+            <span class="btn-label">💾 Guardar Registro</span>
+            <span class="btn-loading hidden">⏳ Guardando...</span>
+          </button>
+        </div>
+
+        <div id="formMessage" class="form-message hidden"></div>
+      </form>
+    </section>
+
+    <!-- PREVIEW TABLE -->
+    <section class="card table-card" id="tableSection">
+      <div class="card-header">
+        <div class="card-icon">📑</div>
+        <div>
+          <h2>Registros en Cola</h2>
+          <p>Registros pendientes de exportar — el más reciente aparece primero</p>
+        </div>
+        <div class="table-actions">
+          <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar registro..." />
+          <button class="btn btn-outline btn-sm" id="exportBtn">⬇ Exportar Excel</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="recordsTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Empresa</th>
+              <th>F. Ingreso</th>
+              <th>H. Ingreso</th>
+              <th>Matrícula</th>
+              <th>Licencia</th>
+              <th>F. Salida</th>
+              <th>H. Salida</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody">
+            <tr class="empty-row">
+              <td colspan="9">
+                <div class="empty-state">
+                  <span class="empty-icon">📋</span>
+                  <p>Sin registros aún. Llena el formulario para comenzar.</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        <span id="recordCount">0 registros</span>
+        <span class="table-tip">Los registros se insertan al inicio del archivo Excel</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="logo footer-logo">
+        <span class="logo-icon">✕</span>
+        <span class="logo-text">KIDDE</span>
+      </div>
+      <p>Bitácora de Acceso © 2024 — Sistema de Registro Profesional</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
